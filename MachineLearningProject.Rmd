@@ -5,92 +5,31 @@ title: "Machine Learning Project"
 ###Executive Summary
 This analysis explores a Weight Lifting Exercise Dataset and attempts to predict the manner in which the participant did the exercise. There is a "classe" factor variable in the training set and any other variables were considered to be part of the prediction model.  This report will describe how the model was built, how cross validation was used, the expected out of sample error based on the model and why certain choices were made. Finally, the results of running the prediction model aginst 20 different test cases is shared.
 
-###How the Model was Built (including Exploratory Data Analysis)
-The training data was first loaded using getURL function.  
+###How the Model was Built (including Exploratory Data Analysis and Preprocessing)
+
 ```{r, echo=TRUE}
 library(RCurl)
 library(caret)
 library(randomForest)
-
-#Get the data and load it into a training variable
-x <- getURL("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
-training <- read.csv(text = x)
 ```
 
-Once loaded, I chose to get rid of columns with large amounts of NAs.
-```{r, echo=TRUE}
-#Get rid of NA columns
-nacols <- function(training) {
-    colnames(training)[unlist(lapply(training, function(x) any(is.na(x))))]
-}
-deleteMeColumns <- nacols(training)
-training <- training[ , -which(names(training) %in% deleteMeColumns)]
-```
+The training and testing sets were loaded using the getURL function.  
 
-I further noted that there was a "X" column that should be removed.
-```{r, echo=TRUE}
-#Get rid of the "X" column and the user name column
-training <- training[ ,-1]
-```
-
-There remained a lot of columns with calculations and sliding window variables that should be removed.
-```{r, echo=TRUE}
-deleteMeColumns2 <- c("user_name", "kurtosis_roll_belt", "kurtosis_picth_belt","kurtosis_yaw_belt","skewness_roll_belt","skewness_roll_belt.1",
-"skewness_yaw_belt","max_yaw_belt","min_yaw_belt","amplitude_yaw_belt","kurtosis_roll_arm","kurtosis_picth_arm",     "kurtosis_yaw_arm",
-"skewness_roll_arm","skewness_pitch_arm","skewness_yaw_arm","kurtosis_roll_dumbbell","kurtosis_picth_dumbbell","kurtosis_yaw_dumbbell",
-"skewness_roll_dumbbell","skewness_pitch_dumbbell","skewness_yaw_dumbbell","max_yaw_dumbbell","min_yaw_dumbbell","amplitude_yaw_dumbbell",
-"total_accel_dumbbell","kurtosis_roll_forearm","kurtosis_picth_forearm","kurtosis_yaw_forearm","skewness_roll_forearm","skewness_pitch_forearm",
-"skewness_yaw_forearm","max_yaw_forearm","min_yaw_forearm", "amplitude_yaw_forearm","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp",
-"new_window","num_window")
-
-training <- training[ , -which(names(training) %in% deleteMeColumns2)]
-```
-
-With all the columns deleted, I divided the training set further to allow for cross validation
-```{r, echo=TRUE}
-inTrain = createDataPartition(training$classe, p = 3/4)[[1]]
-training = training[ inTrain,]
-testing = training[-inTrain,]
-```
-
-With columns removed, I created a random forest model 
-```{r, echo=TRUE}
-modelfitrf <- train(classe ~ ., data = training, method = "rpart")
-confusionMatrix(modelfitrf)
-```
-
-I attempted to test other model types such as glm and glmboost, but could not overcome errors.
-
-###Cross Validation
-I then ran the model againt the test portion of the training set.
-```{r, echo=TRUE}
-CrossVal <- predict(modelfitrf, testing)
-
-# summarize results
-confusionMatrix(CrossVal, testing$classe)
-
-```
-
-###Expected Sample Error
-Based on the chosen model, I expect an accracy to be about 50%.
-
-###Why Different Choices Were Made
-My choices stemmed from direct observation of the data set.  It seemed obvious to remove columns that had a high count of NAs and calculations.  Removing the row id and user name, along with the sliding window columns, seemed like an appropriate step to take. 
-
-I was unable to get any other models to work, so I had to go with the Random Forest method.
-
-###Results and Conclusions
-I loaded the test data to obtain my final results.  
-The training data was first loaded using getURL function.  
 ```{r, echo=TRUE}
 #Get the test data and load it into a test variable
 y <- getURL("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
 testSet <- read.csv(text = y)
+
+#Get the data and load it into a training variable
+x <- getURL("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+training <- read.csv(text = x)
+
 ```
 
-Once loaded, get rid of columns with large amounts of NAs.
+Once loaded, I deleted columns with large amounts of NAs in the testing set.  I created a list 
+of the columns deleted so that it can be used to remove them from the training set.
 ```{r, echo=TRUE}
-#Get rid of NA columns
+#Get rid of NA columns in the test data set
 nacols <- function(testSet) {
     colnames(testSet)[unlist(lapply(testSet, function(x) any(is.na(x))))]
 }
@@ -98,23 +37,69 @@ deleteMeColumns <- nacols(testSet)
 testSet <- testSet[ , -which(names(testSet) %in% deleteMeColumns)]
 ```
 
-I further noted that there was a "X" column that should be removed.
+I then deleted those same columns in the training set.
 ```{r, echo=TRUE}
-#Get rid of the "X" column and the user name column
-testSet <- testSet[ ,-1]
+#Get rid of NA columns that were removed in the test data
+training <- training[ , -which(names(training) %in% deleteMeColumns)]
 ```
 
-There remained a lot of columns with calculations and sliding window variables that should be removed.
+I further noted that there was a "X" column that should be removed from the training set.
 ```{r, echo=TRUE}
+#Get rid of the "X" column
+training <- training[ ,-1]
+```
 
+There remained a few columns related to sliding window variables that should be removed, along with the user name.
+```{r, echo=TRUE}
+deleteMeColumns2 <- c("user_name", "raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp",
+"new_window","num_window")
+
+training <- training[ , -which(names(training) %in% deleteMeColumns2)]
+```
+
+With all the columns deleted, I divided the training set further to allow for cross validation.
+```{r, echo=TRUE}
+inTrain = createDataPartition(training$classe, p = 3/4)[[1]]
+training = training[ inTrain,]
+testing = training[-inTrain,]
+```
+
+With columns removed, I first created a random forest model. 
+```{r, echo=TRUE}
+fitrf <- randomForest(classe ~., data = training, importance = FALSE)
+fitrf
+```
+
+I decided not to examine other model types such as glm and glmboost because the expected error rate was very low with Random Forest.
+
+###Cross Validation
+I then ran the model againt the test portion of the training set.
+```{r, echo=TRUE}
+CrossVal <- predict(fitrf, testing)
+
+# summarize results
+confusionMatrix(CrossVal, testing$classe)
+
+```
+
+###Expected Sample Error
+Based on the chosen model, I expect an error rate less than 0.5%.
+
+###Why Different Choices Were Made
+My choices stemmed from direct observation of the data set.  It seemed obvious to remove columns that had a high count of NAs and calculations.  Removing the row id and user name, along with the sliding window columns, seemed like an appropriate step to take. 
+
+I did not try other model methods because the Random Forest method appeared to work very well.
+
+###Preparing Predictions against the Test Set
+I needed to delete additional columns in the testing set to make sure that they matched
+```{r, echo=TRUE}
+#Get rid of the "X" column and other columns deleted from the training set.
+testSet <- testSet[ ,-1]
 testSet <- testSet[ , -which(names(testSet) %in% deleteMeColumns2)]
 ```
-Finally, I ran the model against the test set and examined the results.
+Finally, I ran the model against the test set to see the results.
 ```{r, echo=TRUE}
-FinalResults <- predict(modelfitrf, testSet)
+FinalResults <- predict(fitrf, testSet)
 FinalResults
-testSet$classe
-# summarize results
-#confusionMatrix(FinalResults, testSet$classe)
 
 ```
